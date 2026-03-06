@@ -29,8 +29,7 @@ See [`docs/architecture_diagram.html`](docs/architecture_diagram.html) for the f
 │   └── himss_patient_semantic_model.yaml  # Semantic View definition (6 tables, 17 VQRs)
 ├── docs/
 │   ├── architecture_diagram.html # Visual architecture diagram
-│   ├── key_highlights.html       # Key capabilities slide
-│   └── HIMSS_DEMO_TALK_TRACKS.md # 3 guided demo talk tracks
+│   └── key_highlights.html       # Key capabilities slide
 └── README.md
 ```
 
@@ -99,14 +98,6 @@ The app runs at `http://localhost:5173`. The Vite dev server proxies `/api` requ
 4. **Zero Data Movement** — Patient records and model inference stay within Snowflake
 5. **Sub-Second Structured Data** — Interactive Tables with always-on warehouse
 6. **Unified Platform** — Agent orchestration, text-to-SQL, and GPU inference on one platform
-
-## Demo Talk Tracks
-
-See [`docs/HIMSS_DEMO_TALK_TRACKS.md`](docs/HIMSS_DEMO_TALK_TRACKS.md) for three guided narratives:
-
-1. **"The Critical Window"** — Acute STEMI, time-sensitive decision making
-2. **"The Medication Detective"** — Drug interactions and clinical history analysis
-3. **"The Multimodal Clinician"** — Combining structured data with medical image interpretation
 
 ## License
 
