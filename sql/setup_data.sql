@@ -238,6 +238,83 @@ INSERT INTO ENCOUNTERS VALUES
  'Well controlled on current regimen. ECG today shows abnormal rhythm pattern. Review pending.');
 
 -- ============================================================
+-- MEDICAL_IMAGES (9 images across 3 patients)
+-- ============================================================
+CREATE OR REPLACE TABLE MEDICAL_IMAGES (
+    IMAGE_ID            VARCHAR(20),
+    PATIENT_ID          VARCHAR(36) REFERENCES PATIENTS(PATIENT_ID),
+    MODALITY            VARCHAR(50),
+    BODY_PART           VARCHAR(100),
+    IMAGE_DATE          TIMESTAMP_NTZ,
+    IMAGE_FILE          VARCHAR(500),
+    STAGE_PATH          VARCHAR(500),
+    DESCRIPTION         VARCHAR(1000),
+    ORDERING_PHYSICIAN  VARCHAR(100),
+    CLINICAL_INDICATION VARCHAR(500),
+    STATUS              VARCHAR(20),
+    FINDINGS            VARCHAR(2000),
+    ENCOUNTER_ID        VARCHAR(20)
+);
+
+INSERT INTO MEDICAL_IMAGES VALUES
+-- P-1001 (Maria Santos): ECG, Chest X-Ray, Echo
+('IMG-7001', 'P-1001', 'ECG', 'Heart', '2025-06-10 14:30:00', 'dummy/ecg_p1001_stemi_lad.png',
+ 'ecg_data_new_version/ecg data new version/myocardial_infarction_ecg_images/MI(1).jpg',
+ '12-lead ECG showing post-MI changes with ST elevation in leads V1-V4', 'Dr. Sarah Chen',
+ 'Post-MI monitoring, LAD STEMI day 3', 'reviewed',
+ 'ST elevation in V1-V4, Q waves in V2-V3, consistent with anterior STEMI', 'E-2001'),
+
+('IMG-7004', 'P-1001', 'Chest X-Ray', 'Chest', '2025-06-10 08:15:00', 'dummy/chest_xray_p1001_admission.png',
+ 'dummy/chest_xray_p1001_admission.png',
+ 'PA chest radiograph on admission', 'Dr. Sarah Chen',
+ 'Dyspnea, rule out pulmonary edema post-MI', 'reviewed',
+ 'Mild cardiomegaly. Clear lung fields bilaterally. No pleural effusion. Mediastinal contours normal.', 'E-2001'),
+
+('IMG-7005', 'P-1001', 'Echocardiogram', 'Heart', '2025-06-11 10:00:00', 'dummy/echo_p1001_post_pci.png',
+ 'dummy/echo_p1001_post_pci.png',
+ 'Transthoracic echocardiogram, apical 4-chamber view post PCI', 'Dr. Sarah Chen',
+ 'LV function assessment post LAD PCI', 'reviewed',
+ 'LVEF 42%. Anterior wall hypokinesis. Mild mitral regurgitation. No pericardial effusion.', 'E-2001'),
+
+-- P-1002 (James Wilson): ECG, Chest X-Ray, Angiogram
+('IMG-7010', 'P-1002', 'ECG', 'Heart', '2025-06-12 02:45:00', 'dummy/ecg_p1002_stemi_rca.png',
+ 'ecg_data_new_version/ecg data new version/myocardial_infarction_ecg_images/MI(10).jpg',
+ '12-lead ECG showing acute inferior STEMI with RCA involvement', 'Dr. Sarah Chen',
+ 'Acute chest pain, troponin elevated, RCA occlusion', 'reviewed',
+ 'ST elevation in II, III, aVF. Reciprocal depression in I, aVL. Acute inferior STEMI.', 'E-2004'),
+
+('IMG-7013', 'P-1002', 'Chest X-Ray', 'Chest', '2025-06-12 03:00:00', 'dummy/chest_xray_p1002_er.png',
+ 'dummy/chest_xray_p1002_er.png',
+ 'PA chest radiograph, ER admission', 'Dr. Sarah Chen',
+ 'Acute STEMI workup, assess for heart failure', 'reviewed',
+ 'Cardiomegaly. Bilateral small pleural effusions. Cephalization of pulmonary vessels.', 'E-2004'),
+
+('IMG-7015', 'P-1002', 'Coronary Angiogram', 'Heart', '2025-06-12 05:30:00', 'dummy/angiogram_p1002_rca.png',
+ 'dummy/angiogram_p1002_rca.png',
+ 'Coronary angiogram, RAO 30 degree projection showing RCA', 'Dr. Sarah Chen',
+ 'Acute STEMI, emergent cardiac catheterization', 'reviewed',
+ '99% proximal RCA occlusion. TIMI 0 flow pre-intervention. Successful PCI with DES placement. TIMI 3 flow restored.', 'E-2004'),
+
+-- P-1003 (Aisha Rahman): ECG, Holter, Cardiac MRI
+('IMG-7020', 'P-1003', 'ECG', 'Heart', '2025-06-08 16:20:00', 'dummy/ecg_p1003_svt.png',
+ 'ecg_data_new_version/ecg data new version/abnormal_heartbeat_ecg_images/HB(1).jpg',
+ '12-lead ECG during SVT episode showing narrow complex tachycardia', 'Dr. Michael Torres',
+ 'Palpitations, dizziness, recurrent SVT episodes', 'reviewed',
+ 'Narrow complex tachycardia at 178 bpm. No P waves visible. Regular R-R intervals. Consistent with AVNRT.', 'E-2007'),
+
+('IMG-7023', 'P-1003', 'Holter Monitor', 'Heart', '2025-06-09 00:00:00', 'dummy/holter_p1003_24hr.png',
+ 'dummy/holter_p1003_24hr.png',
+ '24-hour Holter monitor, 3-lead continuous recording', 'Dr. Michael Torres',
+ 'Quantify SVT episodes, assess rate control', 'reviewed',
+ 'Multiple SVT episodes recorded (12 episodes, longest 4 min 32 sec). Max HR 188 bpm. Average HR 92 bpm. No significant pauses.', 'E-2007'),
+
+('IMG-7025', 'P-1003', 'Cardiac MRI', 'Heart', '2025-06-09 14:00:00', 'dummy/cardiac_mri_p1003.png',
+ 'dummy/cardiac_mri_p1003.png',
+ 'Cardiac MRI short-axis SSFP cine, end-diastolic frame', 'Dr. Michael Torres',
+ 'Evaluate structural heart disease, pre-ablation workup', 'reviewed',
+ 'Normal LV size and function. LVEF 58%. No late gadolinium enhancement. No structural abnormality to account for SVT.', 'E-2007');
+
+-- ============================================================
 -- MEDGEMMA_MEDICAL_INTERPRETER stored procedure
 -- ============================================================
 CREATE OR REPLACE PROCEDURE DEMO_DB.HIMSS_DEMO.MEDGEMMA_MEDICAL_INTERPRETER(
