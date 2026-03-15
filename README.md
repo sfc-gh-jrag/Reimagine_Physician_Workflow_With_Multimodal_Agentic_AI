@@ -13,8 +13,6 @@ Cortex Agent (claude-4-sonnet)
   └── MEDGEMMA_INTERPRETER   →  Stored Procedure → SPCS (MedGemma 4B GPU)  →  Image Stage
 ```
 
-See [`docs/architecture_diagram.html`](docs/architecture_diagram.html) for the full visual architecture.
-
 ## Project Structure
 
 ```
@@ -25,11 +23,9 @@ See [`docs/architecture_diagram.html`](docs/architecture_diagram.html) for the f
 │   │   └── types/                # TypeScript interfaces
 │   └── public/images/dummy/      # Sample medical images (ECG, X-ray, Echo, etc.)
 ├── sql/
-│   ├── setup_data.sql            # DDL for tables, data, MedGemma stored procedure
+│   ├── deploy_medgemma.sql       # Step 1: MedGemma deployment prerequisites (compute pool, EAI, secrets)
+│   ├── setup_data.sql            # Step 2: DDL for tables, data, MedGemma stored procedure
 │   └── himss_patient_semantic_model.yaml  # Semantic View definition (6 tables, 17 VQRs)
-├── docs/
-│   ├── architecture_diagram.html # Visual architecture diagram
-│   └── key_highlights.html       # Key capabilities slide
 └── README.md
 ```
 
@@ -49,46 +45,159 @@ See [`docs/architecture_diagram.html`](docs/architecture_diagram.html) for the f
 
 ## Prerequisites
 
-- Snowflake account with Cortex Agent, Cortex Analyst, and SPCS enabled
-- MedGemma 4B model deployed on SPCS (see `sql/setup_data.sql`)
+- Snowflake account (commercial AWS/Azure/GCP) with Cortex Agent, Cortex Analyst, and SPCS enabled
 - Node.js 18+
-- Snowflake PAT token for authentication
+- A [Hugging Face account](https://huggingface.co/join) with access to [MedGemma 4B](https://huggingface.co/google/medgemma-4b-it) (accept the license)
+- A Hugging Face access token ([generate here](https://huggingface.co/settings/tokens))
+- A Snowflake PAT (Programmatic Access Token) for API authentication
+
+---
 
 ## Setup
 
-### 1. Snowflake Backend
+### Step 1: Deploy MedGemma to SPCS
 
-Run the SQL setup to create the database objects, load sample patient data, and configure the semantic view:
+This step creates the GPU compute pool, secrets, network rules, and imports MedGemma from Hugging Face.
+
+#### 1a. Run the prerequisite SQL
+
+Open `sql/deploy_medgemma.sql` in a Snowflake worksheet and execute it. Before running, update these values:
+
+| Placeholder | What to put |
+|-------------|-------------|
+| `hf_YOUR_TOKEN_HERE` | Your Hugging Face access token |
+| `your_snowflake_pat_here` | Your Snowflake PAT |
+
+This creates:
+- `MEDGEMMA_GPU_POOL` — GPU compute pool (GPU_NV_S, 1 node)
+- `HF_TOKEN_SECRET` — Hugging Face token for gated model access
+- `MEDGEMMA_PAT_SECRET` — PAT for stored procedure authentication
+- `MEDGEMMA_SPCS_EAI` — External access integration
+- `MEDGEMMA_DEMO.PUBLIC.ECG_STAGE` — Stage for medical images
+
+#### 1b. Import MedGemma via Snowsight UI
+
+1. In Snowsight, navigate to **AI & ML → Models → Import model**
+2. **Model handle**: `google/medgemma-4b-it`
+3. **Task**: `text-generation`
+4. Check **"Trust remote code"**
+5. **HF token secret**: `DEMO_DB.HIMSS_DEMO.HF_TOKEN_SECRET`
+6. **Model name**: `MEDGEMMA_4B`
+7. **Version**: `v1`
+8. **Database/Schema**: `DEMO_DB.HIMSS_DEMO`
+9. Click **Continue to deployment**
+10. **Service name**: `MEDGEMMA_SERVICE`
+11. Check **"Create REST API endpoint"**
+12. **Compute pool**: `MEDGEMMA_GPU_POOL`
+13. **GPU**: `1`
+14. Click **Deploy**
+
+Deployment takes ~10-15 minutes. Monitor at **Monitoring → Services & jobs → Jobs tab**.
+
+#### 1c. Retrieve your SPCS endpoint URL
+
+After deployment completes, run:
 
 ```sql
--- Execute in Snowflake
--- 1. Run setup_data.sql to create tables, load data, and create the stored procedure
--- 2. Deploy the semantic view from the YAML
-SELECT SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
-  'DEMO_DB.HIMSS_DEMO',
-  $$<contents of sql/himss_patient_semantic_model.yaml>$$
-);
--- 3. Create the Cortex Agent via Snowsight UI or DDL
+SHOW ENDPOINTS IN SERVICE DEMO_DB.HIMSS_DEMO.MEDGEMMA_SERVICE;
 ```
 
-### 2. Frontend App
+Copy the `ingress_url` value — it looks like:
+```
+https://<unique-id>-<org>-<account>.snowflakecomputing.app
+```
+
+You'll need this URL (with `/__call__` appended) in the next step.
+
+#### 1d. Upload medical images to stage
+
+```sql
+-- From SnowSQL or Snowsight:
+PUT file:///path/to/himss-physician-app/public/images/dummy/*.png
+    @MEDGEMMA_DEMO.PUBLIC.ECG_STAGE/dummy/;
+```
+
+### Step 2: Create Tables, Data & Stored Procedure
+
+Open `sql/setup_data.sql` in a Snowflake worksheet. Before running, update the variables at the top:
+
+```sql
+SET MEDGEMMA_ENDPOINT = 'https://<your-endpoint>.snowflakecomputing.app/__call__';
+SET MY_WAREHOUSE = 'DEMO_BUILD_WH';  -- or your warehouse
+```
+
+Then execute the entire script. This creates:
+- 6 clinical tables with sample patient data (3 patients, 9 images)
+- `MEDGEMMA_MEDICAL_INTERPRETER` stored procedure
+
+### Step 3: Deploy the Semantic View
+
+```sql
+SELECT SYSTEM$CREATE_SEMANTIC_VIEW_FROM_YAML(
+  'DEMO_DB.HIMSS_DEMO',
+  $$<paste contents of sql/himss_patient_semantic_model.yaml>$$
+);
+```
+
+### Step 4: Create the Cortex Agent
+
+Create the agent via Snowsight UI or DDL:
+- **Agent name**: `HIMSS_PHYSICIAN_AGENT` in `SNOWFLAKE_INTELLIGENCE.AGENTS`
+- **Model**: `claude-4-sonnet`
+- **Tools**: `PATIENT_ANALYST` (semantic view), `MEDGEMMA_MEDICAL_INTERPRETER` (stored procedure)
+
+### Step 5: Frontend App
 
 ```bash
 cd himss-physician-app
 cp .env.example .env.local
-# Edit .env.local — set your Snowflake PAT token and account
+```
+
+Edit `.env.local` with your values:
+
+```
+VITE_SNOWFLAKE_PAT=<your Snowflake PAT>
+VITE_SNOWFLAKE_ACCOUNT=<your account identifier>
+```
+
+Then:
+
+```bash
 npm install
 npm run dev
 ```
 
 The app runs at `http://localhost:5173`. The Vite dev server proxies `/api` requests to your Snowflake account.
 
-### 3. Environment Variables
+### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `VITE_SNOWFLAKE_PAT` | Snowflake PAT token for API authentication |
-| `VITE_SNOWFLAKE_ACCOUNT` | Snowflake account identifier (e.g., `sfsenorthamerica-jrag`) |
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `VITE_SNOWFLAKE_PAT` | Snowflake PAT for API authentication | `ver:1-hint:...` |
+| `VITE_SNOWFLAKE_ACCOUNT` | Snowflake account identifier | `myorg-myaccount` |
+
+---
+
+## Verification
+
+After completing all steps, verify the deployment:
+
+```sql
+-- Check MedGemma service is running
+SELECT SYSTEM$GET_SERVICE_STATUS('DEMO_DB.HIMSS_DEMO.MEDGEMMA_SERVICE');
+
+-- Test the stored procedure (text mode)
+CALL DEMO_DB.HIMSS_DEMO.MEDGEMMA_MEDICAL_INTERPRETER(
+    'text', NULL,
+    'Patient: 67F, HTN, T2DM. Meds: Metoprolol 50mg, Lisinopril 20mg, Metformin 1000mg.',
+    'Are there any drug interactions?'
+);
+
+-- Test the stored procedure (image mode)
+CALL DEMO_DB.HIMSS_DEMO.MEDGEMMA_MEDICAL_INTERPRETER(
+    'image', 'IMG-7001', NULL, 'Interpret this ECG'
+);
+```
 
 ## Key Capabilities
 
@@ -98,6 +207,17 @@ The app runs at `http://localhost:5173`. The Vite dev server proxies `/api` requ
 4. **Zero Data Movement** — Patient records and model inference stay within Snowflake
 5. **Sub-Second Structured Data** — Interactive Tables with always-on warehouse
 6. **Unified Platform** — Agent orchestration, text-to-SQL, and GPU inference on one platform
+
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Model import fails | Check HF token is valid and MedGemma license is accepted |
+| Service won't start | Verify compute pool has available GPU nodes: `SHOW COMPUTE POOLS` |
+| Stored procedure timeout | MedGemma cold start can take 1-2 min. Retry after service warms up |
+| "MEDGEMMA_REST_URL not configured" | Run `SET MEDGEMMA_ENDPOINT = '...'` before calling setup_data.sql |
+| Frontend 401 errors | Verify PAT in `.env.local` is valid and not expired |
+| Proxy errors in dev | Check `vite.config.ts` proxy target matches your account |
 
 ## License
 

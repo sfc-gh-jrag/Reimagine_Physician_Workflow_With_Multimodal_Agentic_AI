@@ -1,5 +1,15 @@
+-- ============================================================
+-- IMPORTANT: Run sql/deploy_medgemma.sql FIRST to create the
+-- compute pool, secrets, EAI, and deploy MedGemma to SPCS.
+-- Then update the variables below with your environment values.
+-- ============================================================
+
+-- >>> CONFIGURE THESE VARIABLES FOR YOUR ENVIRONMENT <<<
+SET MEDGEMMA_ENDPOINT = 'https://<your-spcs-endpoint>.snowflakecomputing.app/__call__';  -- From: SHOW ENDPOINTS IN SERVICE <your_service>
+SET MY_WAREHOUSE = 'DEMO_BUILD_WH';  -- Your warehouse name
+
 USE ROLE ACCOUNTADMIN;
-USE WAREHOUSE DEMO_BUILD_WH;
+USE WAREHOUSE IDENTIFIER($MY_WAREHOUSE);
 USE DATABASE DEMO_DB;
 
 CREATE SCHEMA IF NOT EXISTS HIMSS_DEMO;
@@ -340,7 +350,22 @@ import requests
 from snowflake.snowpark.files import SnowflakeFile
 import _snowflake
 
-MEDGEMMA_REST_URL = "https://fdb4qyky-sfsenorthamerica-jrag.snowflakecomputing.app/__call__"
+MEDGEMMA_REST_URL = None  # Set dynamically from session variable
+
+def _get_endpoint(session):
+    """Retrieve the SPCS endpoint URL from session variable or fallback."""
+    global MEDGEMMA_REST_URL
+    if MEDGEMMA_REST_URL is None:
+        try:
+            rows = session.sql("SELECT $MEDGEMMA_ENDPOINT").collect()
+            MEDGEMMA_REST_URL = rows[0][0]
+        except Exception:
+            raise Exception(
+                'MEDGEMMA_REST_URL not configured. '
+                'Run: SET MEDGEMMA_ENDPOINT = \'https://<your-spcs-endpoint>.snowflakecomputing.app/__call__\'; '
+                'Or see sql/deploy_medgemma.sql Step 7 to find your endpoint URL.'
+            )
+    return MEDGEMMA_REST_URL
 
 _http = requests.Session()
 
@@ -349,7 +374,7 @@ def _esc(val):
         return 'NULL'
     return "'" + str(val).replace('\\', '\\\\').replace("'", "\\'") + "'"
 
-def _call_medgemma(prompt_text, image_data_url=None, max_tokens=512):
+def _call_medgemma(prompt_text, image_data_url=None, max_tokens=512, url_override=None):
     pat = _snowflake.get_generic_secret_string('pat_token')
 
     if image_data_url:
@@ -371,8 +396,11 @@ def _call_medgemma(prompt_text, image_data_url=None, max_tokens=512):
         }
     }
 
+    endpoint = url_override or MEDGEMMA_REST_URL
+    if endpoint is None:
+        raise Exception('MEDGEMMA_REST_URL not set. See deploy_medgemma.sql Step 7.')
     resp = _http.post(
-        MEDGEMMA_REST_URL,
+        endpoint,
         json=payload,
         headers={
             "Content-Type": "application/json",
@@ -480,6 +508,8 @@ def medgemma_medical_interpreter(session, p_mode='text', p_image_id=None,
     mode = (p_mode or 'text').strip().lower()
 
     try:
+        _get_endpoint(session)
+
         if mode == 'image':
             if not p_image_id:
                 return json.dumps({'status': 'error', 'message': 'IMAGE mode requires P_IMAGE_ID'})
