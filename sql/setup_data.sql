@@ -6,14 +6,16 @@
 
 -- >>> CONFIGURE THESE VARIABLES FOR YOUR ENVIRONMENT <<<
 SET MEDGEMMA_ENDPOINT = 'https://<your-spcs-endpoint>.snowflakecomputing.app/__call__';  -- From: SHOW ENDPOINTS IN SERVICE <your_service>
+SET MY_DB = 'DEMO_DB';             -- Your database name
+SET MY_SCHEMA = 'HIMSS_DEMO';      -- Your schema name
 SET MY_WAREHOUSE = 'DEMO_BUILD_WH';  -- Your warehouse name
 
 USE ROLE ACCOUNTADMIN;
 USE WAREHOUSE IDENTIFIER($MY_WAREHOUSE);
-USE DATABASE DEMO_DB;
+USE DATABASE IDENTIFIER($MY_DB);
 
-CREATE SCHEMA IF NOT EXISTS HIMSS_DEMO;
-USE SCHEMA HIMSS_DEMO;
+CREATE SCHEMA IF NOT EXISTS IDENTIFIER($MY_SCHEMA);
+USE SCHEMA IDENTIFIER($MY_SCHEMA);
 
 CREATE STAGE IF NOT EXISTS SEMANTIC_STAGE;
 
@@ -327,7 +329,7 @@ INSERT INTO MEDICAL_IMAGES VALUES
 -- ============================================================
 -- MEDGEMMA_MEDICAL_INTERPRETER stored procedure
 -- ============================================================
-CREATE OR REPLACE PROCEDURE DEMO_DB.HIMSS_DEMO.MEDGEMMA_MEDICAL_INTERPRETER(
+CREATE OR REPLACE PROCEDURE MEDGEMMA_MEDICAL_INTERPRETER(
     P_MODE VARCHAR DEFAULT 'text',
     P_IMAGE_ID VARCHAR DEFAULT NULL,
     P_TEXT VARCHAR DEFAULT NULL,
@@ -339,7 +341,7 @@ RUNTIME_VERSION = '3.11'
 PACKAGES = ('snowflake-snowpark-python', 'requests')
 HANDLER = 'medgemma_medical_interpreter'
 EXTERNAL_ACCESS_INTEGRATIONS = (MEDGEMMA_SPCS_EAI)
-SECRETS = ('pat_token' = DEMO_DB.HIMSS_DEMO.MEDGEMMA_PAT_SECRET)
+SECRETS = ('pat_token' = MEDGEMMA_PAT_SECRET)  -- Resolved from current DB.SCHEMA context
 EXECUTE AS CALLER
 AS
 $$
@@ -424,6 +426,9 @@ def _call_medgemma(prompt_text, image_data_url=None, max_tokens=512, url_overrid
 def _interpret_image(session, timings, p_image_id, prompt_text):
     t0 = time.time()
 
+    db = session.get_current_database().replace('"', '')
+    schema = session.get_current_schema().replace('"', '')
+
     rows = session.sql(f"""
         SELECT m.IMAGE_ID, m.PATIENT_ID, m.MODALITY, m.BODY_PART,
                m.IMAGE_DATE, m.STAGE_PATH,
@@ -431,8 +436,8 @@ def _interpret_image(session, timings, p_image_id, prompt_text):
                p.FIRST_NAME, p.LAST_NAME,
                BUILD_SCOPED_FILE_URL(@MEDGEMMA_DEMO.PUBLIC.ECG_STAGE, m.STAGE_PATH) AS SCOPED_URL,
                GET_PRESIGNED_URL(@MEDGEMMA_DEMO.PUBLIC.ECG_STAGE, m.STAGE_PATH, 3600) AS PRESIGNED_URL
-        FROM DEMO_DB.HIMSS_DEMO.MEDICAL_IMAGES_IT m
-        JOIN DEMO_DB.HIMSS_DEMO.PATIENTS_IT p ON m.PATIENT_ID = p.PATIENT_ID
+        FROM {db}.{schema}.MEDICAL_IMAGES_IT m
+        JOIN {db}.{schema}.PATIENTS_IT p ON m.PATIENT_ID = p.PATIENT_ID
         WHERE m.IMAGE_ID = {_esc(p_image_id)}
     """).collect()
 

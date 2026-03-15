@@ -9,6 +9,10 @@
 -- and deploy MedGemma (see README.md for step-by-step guide).
 -- ============================================================
 
+-- >>> CONFIGURE THESE FOR YOUR ENVIRONMENT <<<
+SET MY_DB = 'DEMO_DB';
+SET MY_SCHEMA = 'HIMSS_DEMO';
+
 USE ROLE ACCOUNTADMIN;
 
 -- ============================================================
@@ -34,8 +38,9 @@ GRANT USAGE ON COMPUTE POOL MEDGEMMA_GPU_POOL TO ROLE SYSADMIN;
 --   b) Generate a Hugging Face access token at https://huggingface.co/settings/tokens
 --   c) Replace 'hf_YOUR_TOKEN_HERE' below with your actual token
 
-USE DATABASE DEMO_DB;
-USE SCHEMA HIMSS_DEMO;
+USE DATABASE IDENTIFIER($MY_DB);
+CREATE SCHEMA IF NOT EXISTS IDENTIFIER($MY_SCHEMA);
+USE SCHEMA IDENTIFIER($MY_SCHEMA);
 
 CREATE SECRET IF NOT EXISTS HF_TOKEN_SECRET
     TYPE = GENERIC_STRING
@@ -72,7 +77,7 @@ CREATE OR REPLACE NETWORK RULE MEDGEMMA_SPCS_NETWORK_RULE
 
 CREATE OR REPLACE EXTERNAL ACCESS INTEGRATION MEDGEMMA_SPCS_EAI
     ALLOWED_NETWORK_RULES = (MEDGEMMA_SPCS_NETWORK_RULE)
-    ALLOWED_AUTHENTICATION_SECRETS = (DEMO_DB.HIMSS_DEMO.MEDGEMMA_PAT_SECRET)
+    ALLOWED_AUTHENTICATION_SECRETS = (MEDGEMMA_PAT_SECRET)  -- Resolved from current DB.SCHEMA context
     ENABLED = TRUE;
 
 -- ============================================================
@@ -99,10 +104,10 @@ CREATE STAGE IF NOT EXISTS MEDGEMMA_DEMO.PUBLIC.ECG_STAGE
 --   b) Model handle:  google/medgemma-4b-it
 --   c) Task:          text-generation (or visual-question-answering)
 --   d) Check "Trust remote code" (required for MedGemma)
---   e) HF token secret: DEMO_DB.HIMSS_DEMO.HF_TOKEN_SECRET
+--   e) HF token secret: <YOUR_DB>.<YOUR_SCHEMA>.HF_TOKEN_SECRET
 --   f) Model name:     MEDGEMMA_4B
 --   g) Version name:   v1
---   h) Database/Schema: DEMO_DB.HIMSS_DEMO
+--   h) Database/Schema: <YOUR_DB>.<YOUR_SCHEMA>
 --   i) Click "Continue to deployment"
 --   j) Service name:   MEDGEMMA_SERVICE
 --   k) Check "Create REST API endpoint"
@@ -118,7 +123,7 @@ CREATE STAGE IF NOT EXISTS MEDGEMMA_DEMO.PUBLIC.ECG_STAGE
 -- ============================================================
 -- After deployment completes, run:
 
--- SHOW ENDPOINTS IN SERVICE DEMO_DB.HIMSS_DEMO.MEDGEMMA_SERVICE;
+-- SHOW ENDPOINTS IN SERVICE <YOUR_DB>.<YOUR_SCHEMA>.MEDGEMMA_SERVICE;
 
 -- Copy the ingress_url value. It will look like:
 --   https://<unique-id>-<org>-<account>.snowflakecomputing.app
@@ -142,5 +147,5 @@ GRANT BIND SERVICE ENDPOINT ON ACCOUNT TO ROLE SYSADMIN;
 
 -- SHOW COMPUTE POOLS LIKE 'MEDGEMMA%';
 -- SHOW SERVICES IN COMPUTE POOL MEDGEMMA_GPU_POOL;
--- SHOW ENDPOINTS IN SERVICE DEMO_DB.HIMSS_DEMO.MEDGEMMA_SERVICE;
--- SELECT SYSTEM$GET_SERVICE_STATUS('DEMO_DB.HIMSS_DEMO.MEDGEMMA_SERVICE');
+-- SHOW ENDPOINTS IN SERVICE <YOUR_DB>.<YOUR_SCHEMA>.MEDGEMMA_SERVICE;
+-- SELECT SYSTEM$GET_SERVICE_STATUS('<YOUR_DB>.<YOUR_SCHEMA>.MEDGEMMA_SERVICE');

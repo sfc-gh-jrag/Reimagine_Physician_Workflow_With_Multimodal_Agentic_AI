@@ -3,6 +3,8 @@ import type { PatientDetail, MedicalImage } from "../types";
 
 const TOKEN = import.meta.env.VITE_SNOWFLAKE_PAT as string | undefined;
 const SQL_API = "/api/v2/statements";
+const SF_DATABASE = import.meta.env.VITE_SNOWFLAKE_DATABASE as string || "DEMO_DB";
+const SF_SCHEMA = import.meta.env.VITE_SNOWFLAKE_SCHEMA as string || "HIMSS_DEMO";
 
 interface UsePatientDataReturn {
   patientData: PatientDetail | null;
@@ -24,8 +26,8 @@ async function runSQL(sql: string, warehouse = "HIMSS_INTERACTIVE_WH"): Promise<
     body: JSON.stringify({
       statement: sql,
       warehouse,
-      database: "DEMO_DB",
-      schema: "HIMSS_DEMO",
+      database: SF_DATABASE,
+      schema: SF_SCHEMA,
       timeout: 60,
     }),
   });
