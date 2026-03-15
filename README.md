@@ -1,17 +1,38 @@
-# PhysicianAssist — Snowflake Multimodal ML + Agentic AI Demo
+# PhysicianAssist — Modular Agentic AI for Physician Workflows
 
-An AI-powered clinical decision support application built entirely on Snowflake. A **Cortex Agent** orchestrates two tools — **Cortex Analyst** for text-to-SQL over patient data and **MedGemma 4B** (on SPCS) for medical image interpretation — giving physicians instant, governed access to structured clinical data and multimodal imaging insights without writing a line of SQL.
+A **modular, EHR-integrable** clinical decision support solution built on Snowflake. A single **Cortex Agent** — exposed as a standard REST API — orchestrates both structured clinical data queries (via Cortex Analyst) and industry-tuned medical imaging AI (MedGemma 4B on SPCS). Any EHR system, clinical workflow, or patient portal can integrate this agent with a single API call — no Snowflake-specific SDK required.
+
+## Why This Matters
+
+- **Modular by design** — The Cortex Agent is a standard REST API (SSE streaming). Epic, Cerner, athenahealth, or any application with HTTP capability can embed it into existing physician workflows.
+- **Industry-tuned AI/ML** — MedGemma 4B (Google's medical vision-language model) runs on Snowflake's GPU infrastructure (SPCS), purpose-built for ECG, X-ray, and echo interpretation — not a general-purpose chatbot.
+- **Agentic orchestration** — The agent intelligently routes physician questions to the right tool: structured patient data queries go to Cortex Analyst, medical image interpretation goes to MedGemma. Physicians ask natural language questions; the agent figures out the rest.
+- **Zero data movement** — Patient records, model inference, and agent orchestration all stay within Snowflake's governed perimeter. No PHI leaves the platform.
 
 ## Architecture
 
 ```
-EHR App (React + Vite)
-  │
-  ▼ REST API (SSE Streaming)
-Cortex Agent (claude-4-sonnet)
-  ├── PATIENT_ANALYST        →  Cortex Analyst + Semantic View  →  6 Interactive Tables
-  └── MEDGEMMA_INTERPRETER   →  Stored Procedure → SPCS (MedGemma 4B GPU)  →  Image Stage
+┌─────────────────────────────────────────────────────┐
+│  Any EHR / Clinical App / Patient Portal            │
+│  (Epic, Cerner, custom app, this React demo, etc.)  │
+└──────────────────────┬──────────────────────────────┘
+                       │ Standard REST API (SSE Streaming)
+                       ▼
+        ┌──────────────────────────────┐
+        │  Cortex Agent (claude-4-sonnet)  │
+        │  POST /api/v2/databases/.../agents/:run  │
+        └──────┬───────────────┬───────┘
+               │               │
+     ┌─────────▼──────┐  ┌─────▼────────────────────┐
+     │ PATIENT_ANALYST │  │ MEDGEMMA_INTERPRETER     │
+     │ Cortex Analyst  │  │ Stored Proc → SPCS GPU   │
+     │ + Semantic View │  │ (MedGemma 4B)            │
+     └────────┬───────┘  └─────┬────────────────────┘
+              │                │
+     6 Interactive Tables    Image Stage (ECG, X-ray, Echo)
 ```
+
+> **The included React app is a reference frontend** simulating a patient panel in an EHR. The core value is the Cortex Agent REST API — swap the frontend for any clinical application.
 
 ## Project Structure
 
@@ -242,14 +263,55 @@ CALL <DB>.<SCHEMA>.MEDGEMMA_MEDICAL_INTERPRETER(
 );
 ```
 
+## EHR Integration Guide
+
+The Cortex Agent is a standard REST endpoint. To integrate into any EHR or clinical workflow:
+
+### 1. API Call (any language/platform)
+
+```bash
+curl -X POST "https://<account>.snowflakecomputing.com/api/v2/databases/<AGENT_DB>/schemas/<AGENT_SCHEMA>/agents/<AGENT_NAME>:run" \
+  -H "Authorization: Bearer <PAT>" \
+  -H "Content-Type: application/json" \
+  -H "Accept: text/event-stream" \
+  -d '{
+    "model": "claude-4-sonnet",
+    "messages": [{
+      "role": "user",
+      "content": [{"type": "text", "text": "What medications is patient P-1001 on and are there any interactions?"}]
+    }]
+  }'
+```
+
+### 2. Integration Patterns
+
+| Pattern | How |
+|---------|-----|
+| **EHR Sidebar Widget** | Embed an iframe or micro-frontend that calls the Agent REST API. Physician clicks a patient → widget sends context + question. |
+| **SMART on FHIR App** | Launch as a SMART app from Epic/Cerner. Map FHIR patient context to Agent queries. |
+| **Backend Service** | Call the Agent API from your middleware (Node.js, Python, Java, .NET). Parse SSE events and render in your existing UI. |
+| **Clinical Decision Alert** | Trigger Agent queries from HL7/FHIR events (e.g., new lab result → "any drug interactions with current meds?"). |
+| **Batch / Async** | Call the stored procedure (`MEDGEMMA_MEDICAL_INTERPRETER`) directly via SQL for batch image interpretation workflows. |
+
+### 3. What You Get
+
+| Component | Integration Surface | What It Does |
+|-----------|---------------------|--------------|
+| **Cortex Agent** | REST API (SSE) | Agentic orchestrator — routes questions to the right tool |
+| **Cortex Analyst** | Via Agent (or direct REST) | Natural language → SQL over patient data |
+| **MedGemma (SPCS)** | Via Agent or `CALL` stored proc | Industry-tuned medical image interpretation |
+| **Semantic View** | Cortex Analyst tool | Governed, validated text-to-SQL with 17 verified queries |
+
+> The React app in this repo demonstrates all of these patterns. Use `useAgentChat.ts` as a reference implementation for SSE streaming integration.
+
 ## Key Capabilities
 
-1. **Cortex Agent** — Native agentic AI that routes physician queries to the right tool
-2. **MedGemma on SPCS** — Google's 4B vision-language model for ECG, X-ray, and echo interpretation
-3. **Cortex Analyst** — Natural language to SQL over 6 clinical tables via semantic view
-4. **Zero Data Movement** — Patient records and model inference stay within Snowflake
-5. **Sub-Second Structured Data** — Interactive Tables with always-on warehouse
-6. **Unified Platform** — Agent orchestration, text-to-SQL, and GPU inference on one platform
+1. **Modular REST API** — Standard HTTP endpoint; integrates with any EHR, portal, or clinical workflow
+2. **Industry-Tuned AI/ML** — MedGemma 4B on SPCS, purpose-built for medical imaging (not a general chatbot)
+3. **Agentic Orchestration** — Cortex Agent routes physician queries to structured data or imaging AI automatically
+4. **Cortex Analyst** — Natural language to SQL over 6 clinical tables via semantic view
+5. **Zero Data Movement** — Patient records and model inference stay within Snowflake's governed perimeter
+6. **Fully Configurable** — All endpoints, databases, models, and stages are parameterized via env vars and `configure.py`
 
 ## Troubleshooting
 
