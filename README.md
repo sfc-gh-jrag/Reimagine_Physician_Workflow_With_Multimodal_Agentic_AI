@@ -64,7 +64,9 @@ Cortex Agent (claude-4-sonnet)
 Run the configure script to update all files (SQL, YAML, frontend) with your database, schema, and account:
 
 ```bash
-python3 configure.py --db MY_DB --schema MY_SCHEMA --account myorg-myaccount --warehouse MY_WH
+python3 configure.py --db MY_DB --schema MY_SCHEMA --account myorg-myaccount --warehouse MY_WH \
+    --interactive-wh MY_INTERACTIVE_WH --image-stage MY_DB.MY_SCHEMA.ECG_STAGE \
+    --agent-db SNOWFLAKE_INTELLIGENCE --agent-schema AGENTS --agent-name MY_AGENT
 ```
 
 Or run interactively:
@@ -75,9 +77,9 @@ python3 configure.py
 
 This updates:
 - `sql/deploy_medgemma.sql` — SET variables for DB/schema
-- `sql/setup_data.sql` — SET variables for DB/schema/warehouse
+- `sql/setup_data.sql` — SET variables for DB/schema/warehouse/image stage
 - `sql/himss_patient_semantic_model.yaml` — all `database:` / `schema:` fields and VQR SQL
-- `himss-physician-app/.env.example` — account, database, schema
+- `himss-physician-app/.env.example` — account, database, schema, warehouse, agent config
 
 > **Defaults**: `DEMO_DB.HIMSS_DEMO` on `myorg-myaccount` with `DEMO_BUILD_WH`. If these work for you, skip this step.
 
@@ -135,9 +137,9 @@ You'll need this URL (with `/__call__` appended) in the next step.
 
 #### 2d. Upload medical images to stage
 
-```sql
+```
 PUT file:///path/to/himss-physician-app/public/images/dummy/*.png
-    @MEDGEMMA_DEMO.PUBLIC.ECG_STAGE/dummy/;
+    @<YOUR_IMAGE_STAGE>/dummy/;
 ```
 
 ### Step 3: Create Tables, Data & Stored Procedure
@@ -180,6 +182,11 @@ VITE_SNOWFLAKE_PAT=<your Snowflake PAT>
 VITE_SNOWFLAKE_ACCOUNT=<your account identifier>
 VITE_SNOWFLAKE_DATABASE=<your database>
 VITE_SNOWFLAKE_SCHEMA=<your schema>
+VITE_SNOWFLAKE_WAREHOUSE=<your interactive warehouse>
+VITE_AGENT_DATABASE=<agent database>          # default: SNOWFLAKE_INTELLIGENCE
+VITE_AGENT_SCHEMA=<agent schema>              # default: AGENTS
+VITE_AGENT_NAME=<agent name>                  # default: HIMSS_PHYSICIAN_AGENT
+VITE_AGENT_MODEL=<agent model>                # default: claude-4-sonnet
 ```
 
 Then:
@@ -199,6 +206,21 @@ The app runs at `http://localhost:5173`. The Vite dev server proxies `/api` requ
 | `VITE_SNOWFLAKE_ACCOUNT` | Snowflake account identifier | `myorg-myaccount` |
 | `VITE_SNOWFLAKE_DATABASE` | Database name | `DEMO_DB` |
 | `VITE_SNOWFLAKE_SCHEMA` | Schema name | `HIMSS_DEMO` |
+| `VITE_SNOWFLAKE_WAREHOUSE` | Warehouse for interactive queries | `HIMSS_INTERACTIVE_WH` |
+| `VITE_AGENT_DATABASE` | Cortex Agent database | `SNOWFLAKE_INTELLIGENCE` |
+| `VITE_AGENT_SCHEMA` | Cortex Agent schema | `AGENTS` |
+| `VITE_AGENT_NAME` | Cortex Agent name | `HIMSS_PHYSICIAN_AGENT` |
+| `VITE_AGENT_MODEL` | Cortex Agent model | `claude-4-sonnet` |
+
+### SQL Session Variables (setup_data.sql)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MY_DB` | Database name | `DEMO_DB` |
+| `MY_SCHEMA` | Schema name | `HIMSS_DEMO` |
+| `MY_WAREHOUSE` | Build warehouse | `DEMO_BUILD_WH` |
+| `MEDGEMMA_ENDPOINT` | SPCS endpoint URL | (required) |
+| `IMAGE_STAGE` | Fully-qualified image stage | `MEDGEMMA_DEMO.PUBLIC.ECG_STAGE` |
 
 ---
 

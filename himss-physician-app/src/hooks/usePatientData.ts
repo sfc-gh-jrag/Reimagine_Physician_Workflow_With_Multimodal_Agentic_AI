@@ -5,6 +5,7 @@ const TOKEN = import.meta.env.VITE_SNOWFLAKE_PAT as string | undefined;
 const SQL_API = "/api/v2/statements";
 const SF_DATABASE = import.meta.env.VITE_SNOWFLAKE_DATABASE as string || "DEMO_DB";
 const SF_SCHEMA = import.meta.env.VITE_SNOWFLAKE_SCHEMA as string || "HIMSS_DEMO";
+const SF_WAREHOUSE = import.meta.env.VITE_SNOWFLAKE_WAREHOUSE as string || "HIMSS_INTERACTIVE_WH";
 
 interface UsePatientDataReturn {
   patientData: PatientDetail | null;
@@ -13,7 +14,7 @@ interface UsePatientDataReturn {
   loadPatient: (patientId: string) => Promise<void>;
 }
 
-async function runSQL(sql: string, warehouse = "HIMSS_INTERACTIVE_WH"): Promise<{ columns: string[]; rows: (string | number | null)[][] }> {
+async function runSQL(sql: string, warehouse = SF_WAREHOUSE): Promise<{ columns: string[]; rows: (string | number | null)[][] }> {
   console.log("[runSQL] Executing:", sql.substring(0, 80));
   const resp = await fetch(SQL_API, {
     method: "POST",

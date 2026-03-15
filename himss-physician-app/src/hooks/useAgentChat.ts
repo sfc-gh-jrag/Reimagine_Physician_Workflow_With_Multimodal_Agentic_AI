@@ -1,8 +1,11 @@
 import { useState, useCallback, useRef } from "react";
 import type { ChatMessage, SqlResult, ToolCall, ImageInterpretation } from "../types";
 
-const AGENT_API_URL =
-  "/api/v2/databases/SNOWFLAKE_INTELLIGENCE/schemas/AGENTS/agents/HIMSS_PHYSICIAN_AGENT:run";
+const AGENT_DB = import.meta.env.VITE_AGENT_DATABASE as string || "SNOWFLAKE_INTELLIGENCE";
+const AGENT_SCHEMA = import.meta.env.VITE_AGENT_SCHEMA as string || "AGENTS";
+const AGENT_NAME = import.meta.env.VITE_AGENT_NAME as string || "HIMSS_PHYSICIAN_AGENT";
+const AGENT_MODEL = import.meta.env.VITE_AGENT_MODEL as string || "claude-4-sonnet";
+const AGENT_API_URL = `/api/v2/databases/${AGENT_DB}/schemas/${AGENT_SCHEMA}/agents/${AGENT_NAME}:run`;
 
 interface UseAgentChatReturn {
   messages: ChatMessage[];
@@ -65,7 +68,7 @@ export function useAgentChat(): UseAgentChatReturn {
             Accept: "text/event-stream",
           },
           body: JSON.stringify({
-            model: "claude-4-sonnet",
+            model: AGENT_MODEL,
             messages: [
               ...messages
                 .filter((m) => !m.isStreaming && m.content)

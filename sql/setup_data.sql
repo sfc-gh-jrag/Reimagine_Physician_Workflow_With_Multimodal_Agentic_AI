@@ -9,6 +9,7 @@ SET MEDGEMMA_ENDPOINT = 'https://<your-spcs-endpoint>.snowflakecomputing.app/__c
 SET MY_DB = 'DEMO_DB';             -- Your database name
 SET MY_SCHEMA = 'HIMSS_DEMO';      -- Your schema name
 SET MY_WAREHOUSE = 'DEMO_BUILD_WH';  -- Your warehouse name
+SET IMAGE_STAGE = 'MEDGEMMA_DEMO.PUBLIC.ECG_STAGE';  -- Fully-qualified stage for medical images
 
 USE ROLE ACCOUNTADMIN;
 USE WAREHOUSE IDENTIFIER($MY_WAREHOUSE);
@@ -353,6 +354,7 @@ from snowflake.snowpark.files import SnowflakeFile
 import _snowflake
 
 MEDGEMMA_REST_URL = None  # Set dynamically from session variable
+IMAGE_STAGE_REF = None    # Set dynamically from session variable
 
 def _get_endpoint(session):
     """Retrieve the SPCS endpoint URL from session variable or fallback."""
@@ -368,6 +370,19 @@ def _get_endpoint(session):
                 'Or see sql/deploy_medgemma.sql Step 7 to find your endpoint URL.'
             )
     return MEDGEMMA_REST_URL
+
+def _get_image_stage(session):
+    """Retrieve the image stage reference from session variable or fallback."""
+    global IMAGE_STAGE_REF
+    if IMAGE_STAGE_REF is None:
+        try:
+            rows = session.sql("SELECT $IMAGE_STAGE").collect()
+            IMAGE_STAGE_REF = rows[0][0]
+        except Exception:
+            db = session.get_current_database().replace('"', '')
+            schema = session.get_current_schema().replace('"', '')
+            IMAGE_STAGE_REF = f"{db}.{schema}.ECG_STAGE"
+    return IMAGE_STAGE_REF
 
 _http = requests.Session()
 
@@ -428,14 +443,15 @@ def _interpret_image(session, timings, p_image_id, prompt_text):
 
     db = session.get_current_database().replace('"', '')
     schema = session.get_current_schema().replace('"', '')
+    img_stage = _get_image_stage(session)
 
     rows = session.sql(f"""
         SELECT m.IMAGE_ID, m.PATIENT_ID, m.MODALITY, m.BODY_PART,
                m.IMAGE_DATE, m.STAGE_PATH,
                m.DESCRIPTION, m.CLINICAL_INDICATION, m.FINDINGS,
                p.FIRST_NAME, p.LAST_NAME,
-               BUILD_SCOPED_FILE_URL(@MEDGEMMA_DEMO.PUBLIC.ECG_STAGE, m.STAGE_PATH) AS SCOPED_URL,
-               GET_PRESIGNED_URL(@MEDGEMMA_DEMO.PUBLIC.ECG_STAGE, m.STAGE_PATH, 3600) AS PRESIGNED_URL
+               BUILD_SCOPED_FILE_URL(@{img_stage}, m.STAGE_PATH) AS SCOPED_URL,
+               GET_PRESIGNED_URL(@{img_stage}, m.STAGE_PATH, 3600) AS PRESIGNED_URL
         FROM {db}.{schema}.MEDICAL_IMAGES_IT m
         JOIN {db}.{schema}.PATIENTS_IT p ON m.PATIENT_ID = p.PATIENT_ID
         WHERE m.IMAGE_ID = {_esc(p_image_id)}
